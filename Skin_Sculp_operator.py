@@ -38,7 +38,11 @@ class SCENE_PG_Sculpt_Tools(PropertyGroup):
             description="Subdivision Surface first of Skin Modifier"
             )
     
-
+    distance: FloatProperty(
+            name="Clean Limit",
+            default=0.001,
+            description="Distance from vertices to collpse to clean surface"
+            )
 
 
 def RemoveDoubles (mesh,distance):
@@ -74,7 +78,7 @@ def convert_envelop(context):
         verts.append(v2)
         radius.append(r1)
         radius.append(r2)
-        print(verts) 
+        #print(verts) 
         edges.append( (verts.index(verts[-1]),verts.index(verts[-2])))
 
 
@@ -117,7 +121,10 @@ class OBJECT_OT_ConvertEnvelope(bpy.types.Operator):
     bl_idname = "object.convertenvelope"
     bl_label = "Convert Envelope"
     bl_options = {'REGISTER', 'UNDO'}
-
+    
+    update : BoolProperty(default=False)
+    
+    
     # generic transform props
     align_items = (
         ('WORLD', "World", "Align the new object to the world"),
@@ -141,11 +148,12 @@ class OBJECT_OT_ConvertEnvelope(bpy.types.Operator):
 
     def execute(self, context):
         prop = context.scene.sculpttools
+        arm = context.object
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
         cursor = context.scene.cursor.location
         context.scene.cursor.location = context.object.location
-        context.object.display_type = 'BOUNDS'
+        arm.display_type = 'BOUNDS'
 
         verts_loc, edges, radius = convert_envelop(
             context
@@ -164,24 +172,43 @@ class OBJECT_OT_ConvertEnvelope(bpy.types.Operator):
 
         bm.to_mesh(mesh)
         mesh.update()
-
-        # add the mesh as an object into the scene with this utility module
-        from bpy_extras import object_utils
-        object_utils.object_data_add(context, mesh, operator=self)
-        
-        context.scene.cursor.location = cursor
-        mod = context.object.modifiers.new("Subdiv",'SUBSURF')
-        mod.levels = prop.presub
-        context.object.modifiers.new("Skin",'SKIN')
+        if not self.update:
+            # add the mesh as an object into the scene with this utility module
+            from bpy_extras import object_utils
+            object_utils.object_data_add(context, mesh, operator=self)
+            
+            context.scene.cursor.location = cursor
+            
+            obj = context.object
+            arm.envelope_ID = obj.name
+            mod = obj.modifiers.new("Subdiv",'SUBSURF')
+            mod.levels = prop.presub
+            obj.modifiers.new("Skin",'SKIN')
+        else:
+            obj = context.scene.objects[arm.envelope_ID]
+            _mesh = obj.data
+            obj.data = mesh
+            bpy.data.meshes.remove(_mesh)
+            context.view_layer.objects.active = obj
+            bpy.ops.mesh.customdata_skin_add()
+            context.scene.cursor.location = cursor
+            context.view_layer.objects.active = arm
         i = 0
         for r in radius:
-            context.object.data.skin_vertices[0].data[i].radius = r,r
+            obj.data.skin_vertices[0].data[i].radius = r,r
+            
             i+=1        
-        mesh = context.object.data
-        mesh_ = RemoveDoubles (mesh, 0.0001)
-        context.object.data=mesh_
-        mod = context.object.modifiers.new("Subdiv",'SUBSURF')
-        mod.levels = prop.subsurf
+        
+        mesh = obj.data
+        mesh_ = RemoveDoubles (mesh, prop.distance)
+        #mesh_ = mesh
+        
+        obj.data = mesh_
+        if not self.update:
+            mod = obj.modifiers.new("Subdiv",'SUBSURF')
+            mod.levels = prop.subsurf
+        else:
+            bpy.ops.object.mode_set(mode='EDIT')
         return {'FINISHED'}
 
 class SCULPT_MT_Extra_tools(Panel):
@@ -192,6 +219,7 @@ class SCULPT_MT_Extra_tools(Panel):
 
     def draw(self, context):
         prop = context.scene.sculpttools
+        obj = context.object
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False  # No animation.
@@ -204,14 +232,22 @@ class SCULPT_MT_Extra_tools(Panel):
         row = layout.row(align=True)
         row.prop(prop, "presub")
         row = layout.row(align=True)
+        row.prop(prop, "distance")
+        row = layout.row(align=True)
         row.separator()
         row = layout.row(align=True)
-        row.operator("object.convertenvelope",
-                        icon='MOD_SKIN',
-                        text="Skin Armature")
-
-
-
+        if obj:
+            if obj.type == 'ARMATURE':
+                row.operator("object.convertenvelope",
+                                icon='MOD_SKIN',
+                                text="Skin Armature").update = False
+                if obj.envelope_ID != "":
+                    if obj.envelope_ID in context.scene.objects:
+                        row.operator("object.convertenvelope",
+                                        icon='MOD_SKIN',
+                                        text="Update").update = True
+            else:
+                row.label(text="Select or Add Armature/Envelope to make Skin")
 
 classes = (
     SCENE_PG_Sculpt_Tools,
@@ -232,6 +268,7 @@ def register():
     for cls in classes:
         register_class(cls)
     bpy.types.Scene.sculpttools = PointerProperty(type=SCENE_PG_Sculpt_Tools)
+    bpy.types.Object.envelope_ID = StringProperty(default="")
     bpy.types.VIEW3D_HT_tool_header.append(menu_func)
 
 def unregister():
