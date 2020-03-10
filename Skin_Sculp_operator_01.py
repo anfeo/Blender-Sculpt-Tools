@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Sculpt Tools",
     "author": "Alfonso Annarumma",
-    "version": (1, 0),
+    "version": (1, 1),
     "blender": (2, 80, 0),
     "location": "Header > Show Tools Settings > Sculpt Tools",
     "description": "Adds a new Mesh Object",
