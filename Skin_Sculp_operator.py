@@ -323,7 +323,7 @@ class OBJECT_OT_ConvertEnvelope(bpy.types.Operator):
                 bpy.ops.object.mode_set(mode='EDIT')
             return {'FINISHED'}
 
-class SCULPT_MT_Extra_tools(Panel):
+class SCULPT_PT_Extra_tools(Panel):
     bl_label = "Sculpt Tools"
     bl_idname = "SCULPT_MT_Extra_tools"
     bl_region_type = "WINDOW"
@@ -386,7 +386,7 @@ classes = (
     SCENE_PG_Sculpt_Tools,
     OBJECT_OT_ConvertEnvelope,
     OBJECT_OT_AddEnvelope,
-    SCULPT_MT_Extra_tools,
+    SCULPT_PT_Extra_tools,
     )
 
 
